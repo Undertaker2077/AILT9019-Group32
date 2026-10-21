@@ -1,0 +1,234 @@
+import base64
+import copy
+import io
+import json
+import os
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import patch
+import urllib.error
+from app import config, documents, engine, model, store
+
+
+class WorkflowTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.env=patch.dict(os.environ,{'STUDY_CALENDAR_DB':str(Path(self.tmp.name)/'calendar.sqlite3'),
+                                      'STUDY_CALENDAR_CONFIG':str(Path(self.tmp.name)/'config.json')})
+        self.env.start();store.initialize();self.cid=store.demo()['course_id']
+
+    def tearDown(self):
+        self.env.stop();self.tmp.cleanup()
+
+    def scan(self,path):
+        p=config.ROOT/'examples'/path
+        return engine.preview(dict(course_id=self.cid,files=[dict(name=p.name,content=base64.b64encode(p.read_bytes()).decode())]))
+
+    def process(self,path,mode='replay',**extra):
+        snap=self.scan(path)
+        if mode=='live':
+            extra.setdefault('provider',{k:config.load()[k] for k in ('base_url','model')})
+        return engine.process(dict(scan_id=snap['scan_id'],hashes=[d['sha256'] for d in snap['documents']],mode=mode,**extra))
+
+    def pending(self):
+        return [p for p in engine.proposals() if p['status']=='pending']
+
+    def test_empty_install_and_preview_never_write_tasks(self):
+        self.assertEqual(store.state()['tasks'],[])
+        p=engine.preview(dict(course_id=self.cid))
+        self.assertEqual(len(p['documents']),4)
+        self.assertEqual(p['errors'],[])
+        self.assertEqual(store.state()['tasks'],[])
+
+    def test_success_requires_confirmation_and_is_recoverable(self):
+        self.process('course-pack/01-lab-brief.txt')
+        self.assertEqual(store.state()['tasks'],[])
+        p=self.pending()[0]
+        r=engine.decide(p['id'],{'decision':'accept'})
+        self.assertEqual(r['task']['date'],'2026-10-26')
+        self.assertEqual(r['task']['time'],'17:00')
+        self.assertIn('line 4:',r['task']['notes'])
+        self.assertEqual(engine.decide(p['id'],{'decision':'accept'})['task_id'],r['task_id'])
+        self.assertEqual(len(store.state()['tasks']),1)
+
+    def test_all_formats_have_valid_locators(self):
+        for name in ['01-lab-brief.txt','02-project-brief.pdf','03-reflection.docx','04-reading.md']:
+            r=self.process('course-pack/'+name)
+            self.assertEqual(r['results'][0]['status'],'proposed')
+        self.assertEqual(len(self.pending()),3)
+
+    def test_missing_deadline_stays_blank(self):
+        self.process('course-pack/03-reflection.docx')
+        t=engine.decide(self.pending()[0]['id'],{'decision':'accept'})['task']
+        self.assertEqual((t['date'],t['time']),('',''))
+
+    def test_repeated_content_does_not_duplicate(self):
+        self.process('course-pack/01-lab-brief.txt')
+        r=self.process('course-pack/01-lab-brief.txt')
+        self.assertEqual(r['results'][0]['status'],'unchanged')
+        self.assertEqual(len(self.pending()),1)
+
+    def test_identical_bytes_under_another_name_are_reused(self):
+        p=config.ROOT/'examples/course-pack/01-lab-brief.txt'
+        files=[dict(name=n,content=base64.b64encode(p.read_bytes()).decode()) for n in ['a.txt','b.txt']]
+        s=engine.preview(dict(course_id=self.cid,files=files))
+        self.assertTrue(s['documents'][1]['duplicate_in_selection'])
+        r=engine.process(dict(scan_id=s['scan_id'],hashes=[d['sha256'] for d in s['documents']],mode='replay'))
+        self.assertEqual(len(r['results']),1)
+
+    def accepted_lab(self):
+        self.process('course-pack/01-lab-brief.txt')
+        return engine.decide(self.pending()[0]['id'],{'decision':'accept'})['task']
+
+    def test_revised_date_waits_for_review_and_preserves_progress(self):
+        t=self.accepted_lab()
+        t=store.mutate('tasks',t['id'],'PUT',{**t,'progress':75,'notes':'My own note','expected_version':t['version']})
+        self.process('updates/lab-1-revised.txt')
+        self.assertEqual(store.state()['tasks'][0]['date'],'2026-10-26')
+        p=self.pending()[0]
+        self.assertTrue(p['conflict'])
+        with self.assertRaises(ValueError):
+            engine.decide(p['id'],dict(decision='accept',expected_version=t['version']))
+        r=engine.decide(p['id'],dict(decision='accept',expected_version=t['version'],conflict_ack=True))
+        self.assertEqual(r['task']['date'],'2026-10-28')
+        self.assertEqual(r['task']['progress'],75)
+        self.assertTrue(r['task']['notes'].startswith('My own note'))
+
+    def test_later_user_edit_blocks_stale_proposal(self):
+        t=self.accepted_lab();self.process('updates/lab-1-revised.txt')
+        t=store.mutate('tasks',t['id'],'PUT',{**t,'date':'2026-10-29','expected_version':t['version']})
+        p=self.pending()[0]
+        self.assertTrue(p['stale'])
+        with self.assertRaises(store.Conflict):
+            engine.decide(p['id'],dict(decision='accept',expected_version=t['version'],conflict_ack=True))
+        self.assertEqual(store.state()['tasks'][0]['date'],'2026-10-29')
+
+    def test_conflicting_notices_need_acknowledgement(self):
+        self.process('updates/lab-1-conflict.txt')
+        p=self.pending()[0];self.assertTrue(p['conflict'])
+        with self.assertRaises(ValueError):engine.decide(p['id'],dict(decision='accept'))
+        engine.decide(p['id'],dict(decision='accept',conflict_ack=True))
+        self.assertEqual(len(store.state()['tasks']),1)
+
+    def test_reject_changes_no_calendar_records(self):
+        self.process('course-pack/01-lab-brief.txt')
+        engine.decide(self.pending()[0]['id'],dict(decision='reject'))
+        self.assertEqual(store.state()['tasks'],[])
+
+    def test_replay_refuses_unknown_input(self):
+        s=engine.preview(dict(course_id=self.cid,files=[dict(name='custom.txt',content=base64.b64encode(b'Unexpected user document').decode())]))
+        r=engine.process(dict(scan_id=s['scan_id'],hashes=[s['documents'][0]['sha256']],mode='replay'))
+        self.assertEqual(r['results'][0]['status'],'failed')
+        self.assertEqual(store.state()['tasks'],[])
+
+    def test_live_requires_consent_before_any_call(self):
+        with patch.object(model,'complete') as call:
+            with self.assertRaises(ValueError):self.process('course-pack/01-lab-brief.txt',mode='live')
+            call.assert_not_called()
+
+    def test_api_failure_preserves_saved_records(self):
+        before=self.accepted_lab()
+        with patch.object(model,'complete',side_effect=ValueError('Provider unavailable')):
+            r=self.process('updates/lab-1-revised.txt',mode='live',consent=True)
+        self.assertEqual(r['results'][0]['status'],'failed')
+        self.assertEqual(store.state()['tasks'][0],before)
+
+    def test_unreadable_pdf_reports_error(self):
+        s=self.scan('updates/unreadable.pdf')
+        self.assertEqual(s['documents'],[])
+        self.assertIn('No readable text',s['errors'][0]['error'])
+
+    def test_prompt_injection_fixture_has_no_authority(self):
+        self.process('updates/untrusted-instruction.txt')
+        self.assertEqual(self.pending(),[])
+        self.assertEqual(store.state()['tasks'],[])
+
+    def test_unsupported_deadline_is_cleared(self):
+        s=self.scan('course-pack/01-lab-brief.txt');d=s['documents'][0]
+        output=copy.deepcopy(engine.replay(d));output['tasks'][0]['date']='2030-12-31'
+        tasks,errors=engine.validated_tasks(output,d['units'])
+        self.assertFalse(errors);self.assertEqual((tasks[0]['date'],tasks[0]['time']),('',''))
+
+    def test_unsupported_default_time_is_cleared(self):
+        s=self.scan('course-pack/01-lab-brief.txt');d=s['documents'][0]
+        output=copy.deepcopy(engine.replay(d));output['tasks'][0]['time']='23:59'
+        tasks,_=engine.validated_tasks(output,d['units'])
+        self.assertEqual(tasks[0]['time'],'')
+
+    def test_hallucinated_quote_rejected(self):
+        d=self.scan('course-pack/01-lab-brief.txt')['documents'][0]
+        output=copy.deepcopy(engine.replay(d));output['tasks'][0]['evidence'][0]['quote']='This does not occur in the source.'
+        tasks,errors=engine.validated_tasks(output,d['units'])
+        self.assertEqual(tasks,[]);self.assertTrue(errors)
+
+    def test_fake_locator_rejected(self):
+        d=self.scan('course-pack/01-lab-brief.txt')['documents'][0]
+        output=copy.deepcopy(engine.replay(d));output['tasks'][0]['evidence'][0]['locator']='page 999'
+        tasks,errors=engine.validated_tasks(output,d['units'])
+        self.assertEqual(tasks,[]);self.assertTrue(errors)
+
+    def test_upload_path_traversal_rejected(self):
+        with self.assertRaises(ValueError):documents.uploads([dict(name='../private.txt',content='dGVzdA==')])
+
+    def test_folder_scan_skips_hidden_and_external_symlinks(self):
+        root=Path(self.tmp.name)/'input';root.mkdir();(root/'ok.txt').write_text('Visible text')
+        (root/'.private.txt').write_text('Hidden')
+        outside=Path(self.tmp.name)/'outside.txt';outside.write_text('Outside')
+        try:(root/'link.txt').symlink_to(outside)
+        except OSError:pass  # Some Windows accounts cannot create symlinks.
+        self.assertEqual([n for n,_ in documents.folder_files(root)],['ok.txt'])
+
+    def test_manual_edit_requires_expected_version(self):
+        t=self.accepted_lab()
+        with self.assertRaises(store.Conflict):store.mutate('tasks',t['id'],'PUT',{**t,'progress':100})
+
+    def test_configuration_redacts_and_keeps_secret(self):
+        with patch.dict(os.environ,{},clear=True):
+            os.environ['STUDY_CALENDAR_CONFIG']=str(Path(self.tmp.name)/'private.json')
+            result=config.save(dict(api_key='synthetic-test-secret',model='example-model'))
+            self.assertNotIn('api_key',result)
+            self.assertTrue(result['key_configured'])
+            config.save(dict(api_key=''))
+            self.assertEqual(config.load()['api_key'],'synthetic-test-secret')
+
+    def test_provider_errors_do_not_expose_response(self):
+        class Client:
+            def open(self,*args,**kwargs):
+                raise urllib.error.HTTPError('https://example.invalid',401,'Unauthorized',{},io.BytesIO(b'SECRET_FROM_PROVIDER'))
+        with self.assertRaisesRegex(ValueError,'HTTP 401') as caught:
+            model.complete([],settings=dict(base_url='https://example.invalid/v1',model='test',api_key='synthetic'),opener=Client())
+        self.assertNotIn('SECRET',str(caught.exception))
+
+    def test_provider_redirect_never_forwards_authorization(self):
+        self.assertIsNone(model.NoRedirect().redirect_request(None,None,302,'Moved',{},'https://other.invalid'))
+
+    def test_clear_key_and_forbid_insecure_endpoint(self):
+        config.save(dict(api_key='synthetic'))
+        config.save(dict(clear_key=True))
+        self.assertFalse(config.public()['key_configured'])
+        with self.assertRaises(ValueError):config.save(dict(base_url='http://example.invalid'))
+
+    def test_provider_destination_change_blocks_transmission(self):
+        with patch.object(model,'complete') as call:
+            with self.assertRaisesRegex(ValueError,'Provider settings changed'):
+                self.process('course-pack/01-lab-brief.txt',mode='live',consent=True,
+                             provider={'base_url':'https://different.invalid/v1','model':'unknown'})
+            call.assert_not_called()
+
+    def test_default_provider_client_keeps_tls_verification(self):
+        import ssl
+        class Response:
+            def __enter__(self):return self
+            def __exit__(self,*args):return False
+            def read(self,*args):return b'{"choices":[{"finish_reason":"stop","message":{"content":"{\\"tasks\\":[]}"}}]}'
+        class Client:
+            def open(self,*args,**kwargs):return Response()
+        with patch.object(model.urllib.request,'build_opener',return_value=Client()) as build:
+            self.assertEqual(model.complete([],settings=dict(base_url='https://example.invalid/v1',model='test',api_key='synthetic')),{'tasks':[]})
+        context=build.call_args.args[1]._context
+        self.assertEqual(context.verify_mode,ssl.CERT_REQUIRED)
+        self.assertTrue(context.check_hostname)
+
+
+if __name__=='__main__':unittest.main()
