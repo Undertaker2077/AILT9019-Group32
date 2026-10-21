@@ -1,0 +1,5 @@
+SYNTH101 - Fictional course; self-authored synthetic material.
+Assignment ID: lab-1
+Task: Submit Lab 1 report.
+Deadline: 2026-10-26 17:00 (Asia/Hong_Kong).
+Submission: Upload one PDF report (maximum 3 pages).
