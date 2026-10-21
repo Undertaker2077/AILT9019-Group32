@@ -7,9 +7,17 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from socketserver import TCPServer
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlsplit
 from app import config, engine, model, store
+
+
+class LoopbackHTTPServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # This local-only service needs no reverse DNS lookup during startup.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -142,7 +150,7 @@ def main():
     store.initialize()
     if args.demo:
         store.demo()
-    with ThreadingHTTPServer(('127.0.0.1',args.port),Handler) as server:
+    with LoopbackHTTPServer(('127.0.0.1',args.port),Handler) as server:
         print(f'AI Study Calendar: http://localhost:{server.server_port} (Ctrl+C to stop)',flush=True)
         try:
             server.serve_forever()
