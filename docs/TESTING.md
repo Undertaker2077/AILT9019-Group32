@@ -4,7 +4,9 @@ Date: 2026-10-21, Asia/Hong_Kong. These are observed checks, not the final held-
 
 ## Automated tests
 
-**31 tests passed** on this macOS machine with a fresh project virtual environment, Python 3.14.2. Dependencies were actually installed from the pinned requirements. The final run treated ResourceWarning as an error; explicit SQLite and HTTP-response closure avoids relying on garbage collection for Windows file release.
+**32 tests passed** on this macOS machine with a fresh project virtual environment, Python 3.14.2. Dependencies were actually installed from the pinned requirements. The final run treated ResourceWarning as an error; explicit SQLite and HTTP-response closure avoids relying on garbage collection for Windows file release.
+
+The same source at commit `127b3b8` passed all six hosted jobs: Windows, macOS and Ubuntu, each with Python 3.11 and 3.13. See the [successful GitHub Actions run](https://github.com/Undertaker2077/AILT9019-Group32/actions/runs/39546429264). The first macOS runs stalled during server startup; extending the test wait alone did not resolve this. Removing the standard HTTP server's unnecessary reverse DNS lookup resolved startup, and a regression test now checks that local binding requires no hostname lookup. Test startup has a bounded 30-second wait and cleans resources even when setup fails.
 
 ```sh
 .venv/bin/python -W error::ResourceWarning -m unittest discover -s tests -v
@@ -21,7 +23,7 @@ Tests cover:
 - Fixture replay refuses new/modified content; unreadable PDFs report a limitation.
 - Fake provider failure preserves confirmed tasks; authenticated redirects are refused; TLS verification remains enabled.
 - Secret settings never return keys; path traversal and external/hidden source files are excluded.
-- HTTP startup, static resources, creation/review/save, optimistic manual updates, history and Origin boundaries.
+- HTTP startup without DNS, static resources, creation/review/save, optimistic manual updates, history and Origin boundaries.
 
 The source check and package-content verification exclude local database/configuration, virtual environments, course audit files and identifying strings. Their pattern coverage is bounded; this is not a universal secret-detection claim.
 
@@ -45,8 +47,8 @@ This proves those small success cases, not a 90%/95% extraction accuracy result.
 | --- | --- |
 | macOS, Python 3.14.2, fresh virtual environment | Installation, automated tests and live browser workflow passed |
 | macOS, Chrome | TXT/PDF preview and live PDF candidate confirmation/calendar display observed |
-| Windows | Portable backend and setup/start scripts provided; real-device browser/folder-open verification pending |
-| GitHub Actions | Matrix for Windows/macOS/Linux and Python 3.11/3.13 is configured; remote run pending first push |
+| Windows | Hosted automated tests passed with Python 3.11 and 3.13; real-device launcher/browser/folder-open verification pending |
+| GitHub Actions | All six Windows/macOS/Linux and Python 3.11/3.13 jobs passed at commit `127b3b8`; run linked above |
 
 The action versions follow the current [checkout](https://github.com/actions/checkout) and [setup-python](https://github.com/actions/setup-python) usage examples; token permissions are limited to `contents: read`.
 
