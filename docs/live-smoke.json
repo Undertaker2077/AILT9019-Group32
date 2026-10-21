@@ -1,0 +1,24 @@
+{
+  "checked_date": "2026-10-21",
+  "timezone": "Asia/Hong_Kong",
+  "txt_api": {
+    "model": "qwen3.8-flash",
+    "input": "examples/course-pack/01-lab-brief.txt",
+    "valid_task_count": 1,
+    "validation_errors": []
+  },
+  "browser_pdf": {
+    "status": "accepted",
+    "result_task_id": 1,
+    "mode": "live",
+    "filename": "02-project-brief.pdf",
+    "model": "qwen3.8-flash"
+  },
+  "calendar_readback": {
+    "title": "Submit Project 1 prototype",
+    "date": "2026-11-03",
+    "time": "12:00",
+    "progress": 0
+  },
+  "note": "Synthetic inputs only; not a held-out evaluation. API key omitted."
+}
