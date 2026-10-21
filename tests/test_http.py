@@ -7,6 +7,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 import urllib.error
 import urllib.request
 
@@ -57,6 +58,13 @@ class HttpTests(unittest.TestCase):
             with urllib.request.urlopen(req,timeout=5) as r:return r.status,json.load(r)
         except urllib.error.HTTPError as e:
             with e:return e.code,json.load(e)
+
+    def test_local_server_starts_without_dns(self):
+        from server import Handler, LoopbackHTTPServer
+        with patch('socket.getfqdn', side_effect=AssertionError('Local startup must not need DNS')):
+            with LoopbackHTTPServer(('127.0.0.1',0),Handler) as server:
+                self.assertEqual(server.server_name,'127.0.0.1')
+                self.assertGreater(server.server_port,0)
 
     def test_api_lifecycle_and_confirmation(self):
         status,state=self.request('/api/state');self.assertEqual(status,200)
