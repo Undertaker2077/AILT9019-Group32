@@ -17,14 +17,19 @@ class HttpTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp=tempfile.TemporaryDirectory()
+        cls.addClassCleanup(cls.tmp.cleanup)
         cls.log_path=Path(cls.tmp.name)/'server.log'
         cls.log=cls.log_path.open('wb')
+        cls.addClassCleanup(cls.log.close)
         env=os.environ.copy()
         env['STUDY_CALENDAR_DB']=str(Path(cls.tmp.name)/'calendar.sqlite3')
         env['STUDY_CALENDAR_CONFIG']=str(Path(cls.tmp.name)/'config.json')
         cls.proc=subprocess.Popen([sys.executable,str(ROOT/'server.py'),'--port','0'],cwd=ROOT,env=env,stdout=cls.log,stderr=cls.log)
+        cls.addClassCleanup(cls.stop_server)
         import re
-        for _ in range(100):
+        # Cold imports and local hostname resolution can be slower on hosted runners.
+        deadline=time.monotonic()+30
+        while time.monotonic()<deadline:
             text=cls.log_path.read_text(errors='replace')
             match=re.search(r'http://localhost:(\d+)',text)
             if match:
@@ -32,12 +37,17 @@ class HttpTests(unittest.TestCase):
             if cls.proc.poll() is not None:
                 raise RuntimeError('Server failed: '+text)
             time.sleep(.05)
-        cls.proc.terminate()
-        raise RuntimeError('Startup timed out')
+        raise RuntimeError('Server startup exceeded 30 seconds: '+text)
 
     @classmethod
-    def tearDownClass(cls):
-        cls.proc.terminate();cls.proc.wait(timeout=10);cls.log.close();cls.tmp.cleanup()
+    def stop_server(cls):
+        if cls.proc.poll() is None:
+            cls.proc.terminate()
+        try:
+            cls.proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            cls.proc.kill()
+            cls.proc.wait(timeout=10)
 
     def request(self,path,method='GET',data=None,origin=None):
         headers={} if data is None else {'Content-Type':'application/json'}
