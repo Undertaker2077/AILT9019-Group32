@@ -1,0 +1,171 @@
+{
+  "e9a5afeb387b8c59c768d10e20191e923be807b4d3b26853afa268f1d9a4ae97": {
+    "tasks": [
+      {
+        "task_key": "lab-1",
+        "title": "Submit Lab 1 report.",
+        "date": "2026-10-26",
+        "time": "17:00",
+        "tentative": false,
+        "requirements": [
+          "Submission: Upload one PDF report (maximum 3 pages)."
+        ],
+        "evidence": [
+          {
+            "locator": "line 3",
+            "quote": "Task: Submit Lab 1 report.",
+            "field": "task"
+          },
+          {
+            "locator": "line 4",
+            "quote": "2026-10-26 17:00",
+            "field": "deadline"
+          },
+          {
+            "locator": "line 5",
+            "quote": "Submission: Upload one PDF report (maximum 3 pages).",
+            "field": "requirements"
+          }
+        ]
+      }
+    ]
+  },
+  "6c68dbb5ee28b4e0621a302f4da9eedfb621eacfca407f61c44cd9a61e849c76": {
+    "tasks": [
+      {
+        "task_key": "project-1",
+        "title": "Submit Project 1 prototype.",
+        "date": "2026-11-03",
+        "time": "12:00",
+        "tentative": false,
+        "requirements": [
+          "Submission: Upload a ZIP with code, README and a test log."
+        ],
+        "evidence": [
+          {
+            "locator": "page 1",
+            "quote": "Task: Submit Project 1 prototype.",
+            "field": "task"
+          },
+          {
+            "locator": "page 1",
+            "quote": "2026-11-03 12:00",
+            "field": "deadline"
+          },
+          {
+            "locator": "page 1",
+            "quote": "Submission: Upload a ZIP with code, README and a test log.",
+            "field": "requirements"
+          }
+        ]
+      }
+    ]
+  },
+  "0b939921fd2885ab74f8de8ffc8269f6966bbc229256843a4e05fa2898e0d6bd": {
+    "tasks": [
+      {
+        "task_key": "reflection-1",
+        "title": "Submit a reflection note.",
+        "date": "",
+        "time": "",
+        "tentative": false,
+        "requirements": [
+          "Submission: Upload one Markdown file."
+        ],
+        "evidence": [
+          {
+            "locator": "paragraph 3",
+            "quote": "Task: Submit a reflection note.",
+            "field": "task"
+          },
+          {
+            "locator": "paragraph 5",
+            "quote": "Submission: Upload one Markdown file.",
+            "field": "requirements"
+          }
+        ]
+      }
+    ]
+  },
+  "188b8b7065be6b6ebba975fc383069ca054ae39882892ae3937b67b3d43a0e32": {
+    "tasks": []
+  },
+  "ebe73cb0265807e7da2cc0a3c328ca2b41ff36245e12609930032fd70b52fe25": {
+    "tasks": [
+      {
+        "task_key": "lab-1",
+        "title": "Submit Lab 1 report.",
+        "date": "2026-10-28",
+        "time": "17:00",
+        "tentative": false,
+        "requirements": [
+          "Submission: Upload one PDF report (maximum 3 pages)."
+        ],
+        "evidence": [
+          {
+            "locator": "line 3",
+            "quote": "Task: Submit Lab 1 report.",
+            "field": "task"
+          },
+          {
+            "locator": "line 4",
+            "quote": "2026-10-28 17:00",
+            "field": "deadline"
+          },
+          {
+            "locator": "line 5",
+            "quote": "Submission: Upload one PDF report (maximum 3 pages).",
+            "field": "requirements"
+          }
+        ]
+      }
+    ]
+  },
+  "a732b1b57a0013e898999667112396a78f2b1c94defb8b491a27049d0e9ce483": {
+    "tasks": []
+  },
+  "ac403f7e1f4120a34e883e7c2a598f067f74b8aed1f8b25b8cfbbc0d542adb27": {
+    "tasks": [
+      {
+        "task_key": "lab-1",
+        "title": "Submit Lab 1 report.",
+        "date": "2026-10-28",
+        "time": "17:00",
+        "tentative": true,
+        "requirements": [],
+        "evidence": [
+          {
+            "locator": "line 3",
+            "quote": "Task: Submit Lab 1 report.",
+            "field": "task"
+          },
+          {
+            "locator": "line 4",
+            "quote": "2026-10-28 17:00",
+            "field": "deadline"
+          }
+        ]
+      },
+      {
+        "task_key": "lab-1",
+        "title": "Submit Lab 1 report.",
+        "date": "2026-10-30",
+        "time": "17:00",
+        "tentative": true,
+        "requirements": [],
+        "evidence": [
+          {
+            "locator": "line 3",
+            "quote": "Task: Submit Lab 1 report.",
+            "field": "task"
+          },
+          {
+            "locator": "line 5",
+            "quote": "2026-10-30 17:00",
+            "field": "deadline"
+          }
+        ]
+      }
+    ]
+  }
+}
