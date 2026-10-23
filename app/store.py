@@ -55,7 +55,7 @@ def initialize():
 def valid_task(data, c):
     title = str(data.get('title', '')).strip()
     if not title or len(title) > 300:
-        raise ValueError('Task title is required (maximum 300 characters).')
+        raise ValueError('请填写任务名称（不超过300字）。')
     cid = int(data.get('course_id', 0))
     if not c.execute('SELECT 1 FROM courses WHERE id=?', (cid,)).fetchone():
         raise ValueError('Select a valid course.')
@@ -66,7 +66,7 @@ def valid_task(data, c):
         dt.date.fromisoformat(date)
     if time:
         if not date or not re.fullmatch(r'\d{2}:\d{2}', time):
-            raise ValueError('A time needs a date and HH:MM format.')
+            raise ValueError('请先选择日期，再填写时间。')
         dt.time.fromisoformat(time)
     progress = data.get('progress', 0)
     if type(progress) is not int or not 0 <= progress <= 100:
@@ -111,7 +111,7 @@ def mutate(table, ident, method, data):
                 c.execute('DELETE FROM scans WHERE course_id=?', (ident,))
             if table == 'courses' and any(c.execute(f'SELECT 1 FROM {t} WHERE course_id=? LIMIT 1', (ident,)).fetchone()
                                          for t in ('tasks', 'documents')):
-                raise ValueError('ERR_COURSE_HAS_TASKS')
+                raise ValueError('此课程已有任务或来源历史记录；请保留它，或使用全新的测试数据库。')
             if table == 'tasks':
                 c.execute('INSERT INTO history(task_id,action,before_json) VALUES(?,?,?)',
                           (ident, 'manual-delete', json.dumps(dict(old))))

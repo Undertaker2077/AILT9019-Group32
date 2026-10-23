@@ -1,9 +1,29 @@
 'use strict';
 const I18N = (() => {
  const messages = {
-    "ERR_COURSE_HAS_TASKS": [
+  "请填写任务名称（不超过300字）。": [
+    "請填寫任務名稱（不超過300字）。",
+    "Task title is required (maximum 300 characters)."
+  ],
+  "请先选择日期，再填写时间。": [
+    "請先選擇日期，再填寫時間。",
+    "Please select a date before entering a time."
+  ],
+  "此课程已有任务或来源历史记录；请保留它，或使用全新的测试数据库。": [
     "此課程已有任務或來源歷史紀錄；請保留它，或使用全新的測試資料庫。",
     "Course has tasks or source history; retain it or use a fresh demo database."
+  ],
+    "文件 \"{name}\" 超过 2MB 限制，请重新选择！": [
+    "檔案 \"{name}\" 超過 2MB 限制，請重新選擇！",
+    "File \"{name}\" exceeds the 2MB limit. Please select another file."
+  ],
+  "最多只能选择 20 份文件！": [
+    "最多只能選擇 20 份檔案！",
+    "Maximum 20 files allowed."
+  ],
+  "所有文件总大小超过 10MB 限制！": [
+    "所有檔案總大小超過 10MB 限制！",
+    "Total file size exceeds the 10MB limit."
   ],
   "学习日历": [
     "學習日曆",

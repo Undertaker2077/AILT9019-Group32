@@ -72,7 +72,26 @@ async function encodedFile(f){
 }
 $('#preview-files').onclick=()=>busy($('#preview-files'),async()=>{
  if(!$('#import-course').value)throw new Error(tr('先创建或选择一门课程。'));
- if(chosenFiles.length>20||chosenFiles.some(f=>f.size>2*1024*1024)||chosenFiles.reduce((s,f)=>s+f.size,0)>10*1024*1024)throw new Error(tr('最多20份文件，每份2MB，总计10MB。'));
+   
+ // 1. 檢查是不是有單一檔案超過 2MB
+  const tooBigFile = chosenFiles.find(f => f.size > 2 * 1024 * 1024);
+  if (tooBigFile) {
+    alert(tr('文件 "{name}" 超过 2MB 限制，请重新选择！', { name: tooBigFile.name }));
+    throw new Error('File too large');
+  }
+
+  // 2. 檢查檔案數量是否超過 20 份
+  if (chosenFiles.length > 20) {
+    alert(tr('最多只能选择 20 份文件！'));
+    throw new Error('Too many files');
+  }
+
+  // 3. 檢查總大小是否超過 10MB
+  if (chosenFiles.reduce((s, f) => s + f.size, 0) > 10 * 1024 * 1024) {
+    alert(tr('所有文件总大小超过 10MB 限制！'));
+    throw new Error('Total size too large');
+  }
+  
  const payload={course_id:Number($('#import-course').value)};
  if(chosenFiles.length)payload.files=await Promise.all(chosenFiles.map(encodedFile));
  importSnapshot=await api('/api/scan','POST',payload);
