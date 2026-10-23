@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 from . import config, documents, model, store
 
-EXTRACTION_LOCK = threading.Lock()
+WORKFLOW_LOCK = threading.Lock()
 
 
 def norm(value):
@@ -42,6 +42,11 @@ def validated_tasks(result, units):
                 verified.append({k: ev[k] for k in ('locator','quote','field')})
             if not any(e['field'] == 'task' for e in verified):
                 raise ValueError('Task lacks a verified task quotation.')
+            task_quotes = [norm(e['quote']).casefold() for e in verified if e['field']=='task']
+            if not any(norm(title).casefold() in quote for quote in task_quotes):
+                raise ValueError('Task title is not supported by its task quotation.')
+            if not any(norm(key).casefold() in source.casefold() for source in sources.values()):
+                raise ValueError('Task identifier does not occur in the extracted source.')
             warnings = []
             date, time = raw.get('date', ''), raw.get('time', '')
             if not isinstance(date, str) or not isinstance(time, str):
@@ -79,6 +84,13 @@ def validated_tasks(result, units):
             if requirements and not any(e['field']=='requirements' for e in verified):
                 warnings.append('Requirements without a supporting quotation were cleared.')
                 requirements = []
+            elif requirements:
+                requirement_quotes = [norm(e['quote']).casefold() for e in verified if e['field']=='requirements']
+                supported = [x for x in requirements if norm(x) and
+                             any(norm(x).casefold() in quote for quote in requirement_quotes)]
+                if len(supported) != len(requirements):
+                    warnings.append('Each unsupported requirement was cleared; review the source quotations.')
+                requirements = supported
             if type(raw.get('tentative', False)) is not bool:
                 raise ValueError('Tentative must be a boolean.')
             output.append(dict(title=title.strip(), task_key=norm(key).casefold(), date=date, time=time,
@@ -90,6 +102,15 @@ def validated_tasks(result, units):
 
 
 def preview(data):
+    if not WORKFLOW_LOCK.acquire(blocking=False):
+        raise store.Conflict('Another extraction is running. Wait for it to finish.')
+    try:
+        return _preview(data)
+    finally:
+        WORKFLOW_LOCK.release()
+
+
+def _preview(data):
     cid = int(data.get('course_id', 0))
     with store.connection() as c:
         course = c.execute('SELECT * FROM courses WHERE id=?', (cid,)).fetchone()
@@ -113,6 +134,7 @@ def preview(data):
             except Exception as e:
                 errors.append(dict(filename=name, error=str(e)[:300] if isinstance(e, (ValueError, UnicodeError, ImportError)) else 'Unreadable document. Check its format and parser installation.'))
         scan_id = uuid.uuid4().hex
+        c.execute('DELETE FROM scans WHERE course_id=?', (cid,))
         c.execute('INSERT INTO scans(id,course_id,snapshot) VALUES(?,?,?)', (scan_id, cid, json.dumps(docs, ensure_ascii=False)))
         return dict(scan_id=scan_id, course_id=cid, documents=docs, errors=errors,
                     notice='Preview only: no model call and no calendar writes. Select files and explicitly confirm processing.')
@@ -126,20 +148,38 @@ def replay(doc):
 
 
 def process(data):
-    if not EXTRACTION_LOCK.acquire(blocking=False):
+    if not WORKFLOW_LOCK.acquire(blocking=False):
         raise store.Conflict('Another extraction is running. Wait for it to finish.')
     try:
         return _process(data)
     finally:
-        EXTRACTION_LOCK.release()
+        WORKFLOW_LOCK.release()
+
+
+def save_settings(data):
+    if not WORKFLOW_LOCK.acquire(blocking=False):
+        raise store.Conflict('Another extraction is running. Wait for it to finish.')
+    try:
+        return config.save(data)
+    finally:
+        WORKFLOW_LOCK.release()
+
+
+def mutate(table, ident, method, data):
+    if table != 'courses' or method != 'DELETE':
+        return store.mutate(table, ident, method, data)
+    if not WORKFLOW_LOCK.acquire(blocking=False):
+        raise store.Conflict('Another extraction is running. Wait for it to finish.')
+    try:
+        return store.mutate(table, ident, method, data)
+    finally:
+        WORKFLOW_LOCK.release()
 
 
 def _process(data):
     mode = data.get('mode')
     if mode not in ('live', 'replay'):
         raise ValueError('Select live API or explicitly labelled fixture replay.')
-    if mode == 'live' and data.get('consent') is not True:
-        raise ValueError('Confirm transmission of selected document text to your configured provider.')
     settings = config.load() if mode == 'live' else None
     if mode == 'live' and data.get('provider') != {k:settings[k] for k in ('base_url','model')}:
         raise ValueError('Provider settings changed. Refresh the preview destination and confirm it again.')
@@ -153,6 +193,11 @@ def _process(data):
     docs = {d['sha256']: d for d in json.loads(scan['snapshot'])}
     if any(x not in docs for x in selection):
         raise ValueError('Selection is not part of this preview.')
+    if mode == 'live':
+        provider = {k:settings[k] for k in ('base_url','model')}
+        expected_consent = dict(confirmed=True, scan_id=scan['id'], hashes=list(dict.fromkeys(selection)), provider=provider)
+        if data.get('consent') != expected_consent:
+            raise ValueError('Confirm transmission for the current preview and provider before any model call.')
     results = []
     for sha in dict.fromkeys(selection):
         doc = docs[sha]

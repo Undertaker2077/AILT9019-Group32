@@ -76,7 +76,7 @@ API key: enter your own; never include it in the repository
 
 Endpoint/model availability depends on the provider and course plan. The backend sends an OpenAI-compatible Chat Completions request, asks for JSON, and validates the response itself. Reference: [Alibaba Cloud structured output documentation](https://www.alibabacloud.com/help/en/model-studio/qwen-structured-output). The app does not require an OpenAI account or SDK.
 
-For live extraction: preview and select files, choose **Live API extraction**, read the destination shown, and explicitly confirm sending **all previewed text of those selected files**. Only then does the backend send sequential model requests. No filename or document is sent during preview. At most ten selected documents are processed per request. A scan snapshot is used, so text displayed in preview is the text sent even if the source file changes later.
+For live extraction: preview and select files, choose **Live API extraction**, read the destination shown, and explicitly confirm sending **all previewed text of those selected files**. Consent is bound to that preview, its selected hashes and the displayed provider; changing any of them clears consent and the backend rejects stale consent. Only then does the backend send sequential model requests. While those requests run, preview, provider-setting and course-deletion mutations are rejected so they cannot invalidate consent between documents. No filename or document is sent during preview. At most ten selected documents are processed per request. A scan snapshot is used, so text displayed in preview is the text sent even if the source file changes later. Starting a new preview replaces the previous temporary snapshot for that course; startup also prunes duplicate snapshots left by older versions.
 
 The key is stored in ignored `local/config.json` and is never returned through API responses. On macOS the file permissions are restricted to its owner; Windows uses the user's normal filesystem permissions. Environment variables `STUDY_API_BASE`, `STUDY_API_MODEL` and `STUDY_API_KEY` override saved settings. `.env.example` documents these variables; `.env` is not automatically loaded.
 
@@ -84,7 +84,7 @@ The key is stored in ignored `local/config.json` and is never returned through A
 
 - A candidate never creates/changes a task until you confirm it. Rejecting a candidate changes no calendar records.
 - Missing dates/times remain empty. Unverifiable model dates/times are cleared and flagged; no default 23:59 or inferred year is added.
-- Quotations and locators must match extracted text. A matching quotation is evidence for review, not a proof that the model interpreted it correctly.
+- Quotations and locators must match extracted text. Task titles and stable identifiers must occur in the source, and every retained requirement must occur in a matching requirements quotation. Matching text is evidence for review, not a proof that the model interpreted it correctly.
 - Exact content duplicates are reused within each course and mode. Stable course/task identifiers suggest updates. Same-title matches are flagged for your decision.
 - An update preserves saved progress, weight and existing notes and appends source evidence. It also records before/after history.
 - Version checks reject stale suggestions if a user edited the task after extraction. Reject the stale candidate and re-analyse the file with **Re-analyse processed files**, then review again.

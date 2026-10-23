@@ -25,8 +25,12 @@ const workflowHTML = `
  <div class="workflow-controls"><button class="primary" type="submit">${tr('保存设置')}</button><button class="small-btn" type="button" id="test-api">${tr('连接测试（会发送一条虚构请求）')}</button></div><p id="settings-status" role="status"></p>
 </form></dialog>`;
 document.body.insertAdjacentHTML('beforeend', workflowHTML);
-let importSnapshot=null, chosenFiles=[], proposalRows=[], providerSettings=null;
+let importSnapshot=null, chosenFiles=[], proposalRows=[], providerSettings=null, liveConsent=null;
 const message=(id,text)=>{$(id).textContent=text;};
+const selectedDocumentHashes=()=>Array.from(document.querySelectorAll('[data-document-hash]:checked')).map(x=>x.dataset.documentHash);
+function clearTransmissionConsent(){
+ liveConsent=null;$('#transmission-consent').checked=false;
+}
 const busy=async(button,action,status='#workflow-status')=>{
  button.disabled=true;message(status,tr('处理中…'));
  try{await action();}catch(e){message(status,e.message);}finally{button.disabled=false;}
@@ -39,11 +43,13 @@ async function fillImportCourses(selected){
 }
 function syncFolderField(){
  const c=state.courses.find(c=>c.id===Number($('#import-course').value));$('#local-folder').value=c?.folder||'';
- importSnapshot=null;$('#preview-result').replaceChildren();
+ importSnapshot=null;clearTransmissionConsent();$('#preview-result').replaceChildren();
 }
 $('#import-course').onchange=syncFolderField;
 async function settingsPublic(){
- providerSettings=await api('/api/settings');
+ const next=await api('/api/settings');
+ if(providerSettings&&(providerSettings.base_url!==next.base_url||providerSettings.model!==next.model))clearTransmissionConsent();
+ providerSettings=next;
  message('#provider-notice',`${tr('实时模式目标')}: ${providerSettings.base_url} · ${providerSettings.model}. ${tr('回放模式不发送网络请求。')}`);
 }
 $('#ai-import').onclick=()=>busy($('#ai-import'),async()=>{
@@ -54,7 +60,7 @@ $('#load-demo').onclick=()=>busy($('#load-demo'),async()=>{
 });
 for(const id of ['#folder-files','#document-files'])$(id).onchange=e=>{
  chosenFiles=Array.from(e.target.files).filter(f=>/\.(pdf|docx|txt|md)$/i.test(f.name)&&!(f.webkitRelativePath||f.name).split('/').some(p=>p.startsWith('.')));
- importSnapshot=null;$('#preview-result').replaceChildren();message('#selected-files',`${chosenFiles.length} ${tr('个文件已选择')}`);
+ importSnapshot=null;clearTransmissionConsent();$('#preview-result').replaceChildren();message('#selected-files',`${chosenFiles.length} ${tr('个文件已选择')}`);
 };
 $('#save-folder').onclick=()=>busy($('#save-folder'),async()=>{
  const cid=Number($('#import-course').value);await api(`/api/courses/${cid}/folder`,'POST',{folder:$('#local-folder').value});chosenFiles=[];await fillImportCourses(cid);message('#selected-files',tr('将读取已关联的本机文件夹'));message('#workflow-status',tr('文件夹关联已保存。'));
@@ -70,18 +76,28 @@ $('#preview-files').onclick=()=>busy($('#preview-files'),async()=>{
  const payload={course_id:Number($('#import-course').value)};
  if(chosenFiles.length)payload.files=await Promise.all(chosenFiles.map(encodedFile));
  importSnapshot=await api('/api/scan','POST',payload);
+ clearTransmissionConsent();
  $('#preview-result').innerHTML=importSnapshot.documents.map(d=>`<article class="preview-card"><label class="check-label"><input type="checkbox" data-document-hash="${d.sha256}" ${d.duplicate_in_selection?'disabled':'checked'}><strong>${esc(d.filename)}</strong></label><p class="workflow-note">${d.units.length} ${tr('处文本')} · ${d.size} bytes · ${d.duplicate_in_selection?tr('同内容副本'):d.previously_processed?tr('已处理过的内容'):tr('新内容')}<br>SHA-256: ${d.sha256}</p><details><summary>${tr('查看将被处理的完整文本')}</summary>${d.units.map(u=>`<h4>${esc(u.locator)}</h4><pre>${esc(u.text)}</pre>`).join('')}</details></article>`).join('')+importSnapshot.errors.map(e=>`<p class="workflow-warning">${esc(e.filename)}: ${esc(e.error)}</p>`).join('');
+ document.querySelectorAll('[data-document-hash]').forEach(x=>x.onchange=clearTransmissionConsent);
  message('#workflow-status',tr('预览完成；尚未调用模型或修改日历。'));
 });
 $('#extract-files').onclick=()=>busy($('#extract-files'),async()=>{
  if(!importSnapshot)throw new Error(tr('请先预览文件。'));
- const mode=$('#extract-mode').value,hashes=Array.from(document.querySelectorAll('[data-document-hash]:checked')).map(x=>x.dataset.documentHash);
- if(mode==='live'&&!$('#transmission-consent').checked)throw new Error(tr('实时模式需要确认文本发送范围。'));
+ const mode=$('#extract-mode').value,hashes=selectedDocumentHashes();
+ const expectedConsent={confirmed:true,scan_id:importSnapshot.scan_id,hashes,provider:{base_url:providerSettings.base_url,model:providerSettings.model}};
+ if(mode==='live'&&JSON.stringify(liveConsent)!==JSON.stringify(expectedConsent))throw new Error(tr('实时模式需要针对当前文件和服务商重新确认文本发送范围。'));
  message('#extraction-result',tr('正在逐份处理，请保持窗口打开…'));
- const r=await api('/api/extract','POST',{scan_id:importSnapshot.scan_id,hashes,mode,provider:{base_url:providerSettings.base_url,model:providerSettings.model},consent:$('#transmission-consent').checked,force:$('#force-extract').checked});
+ const r=await api('/api/extract','POST',{scan_id:importSnapshot.scan_id,hashes,mode,provider:{base_url:providerSettings.base_url,model:providerSettings.model},consent:mode==='live'?liveConsent:null,force:$('#force-extract').checked});
+ clearTransmissionConsent();
  $('#extraction-result').innerHTML=`<p class="mode-badge">${esc(mode==='replay'?tr('示例回放 · 非实时推理'):tr('实时 API 提取'))}</p>`+r.results.map(x=>`<p class="${x.status==='failed'?'workflow-warning':''}">${esc(x.filename)} · ${esc(x.status)} ${x.tasks===undefined?'':`${x.tasks} ${tr('个候选')}`} ${esc(x.error||'')}${x.validation_rejections?.length?'<br>'+esc(x.validation_rejections.join('; ')):''}</p>`).join('');
  await loadProposals();message('#workflow-status',tr('处理完成。日历尚未改变，请逐项核对候选。'));
 });
+$('#extract-mode').onchange=clearTransmissionConsent;
+$('#transmission-consent').onchange=()=>{
+ if(!$('#transmission-consent').checked){liveConsent=null;return;}
+ if(!importSnapshot||!providerSettings){clearTransmissionConsent();message('#workflow-status',tr('请先预览当前文件。'));return;}
+ liveConsent={confirmed:true,scan_id:importSnapshot.scan_id,hashes:selectedDocumentHashes(),provider:{base_url:providerSettings.base_url,model:providerSettings.model}};
+};
 function taskOptions(p){
  return `<option value="">${tr('创建新任务')}</option>`+state.tasks.filter(t=>t.course_id===p.course_id).map(t=>`<option value="${t.id}" data-version="${t.version}" ${p.target_id===t.id?'selected':''}>#${t.id} ${esc(t.title)} · ${esc(t.date||'TBA')} ${esc(t.time)} · ${t.progress}%</option>`).join('');
 }

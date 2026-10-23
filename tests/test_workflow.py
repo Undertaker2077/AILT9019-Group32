@@ -4,7 +4,9 @@ import io
 import json
 import os
 from pathlib import Path
+import sqlite3
 import tempfile
+import threading
 import unittest
 from unittest.mock import patch
 import urllib.error
@@ -29,6 +31,9 @@ class WorkflowTests(unittest.TestCase):
         snap=self.scan(path)
         if mode=='live':
             extra.setdefault('provider',{k:config.load()[k] for k in ('base_url','model')})
+            if extra.get('consent') == 'scope':
+                hashes=[d['sha256'] for d in snap['documents']]
+                extra['consent']=dict(confirmed=True,scan_id=snap['scan_id'],hashes=hashes,provider=extra['provider'])
         return engine.process(dict(scan_id=snap['scan_id'],hashes=[d['sha256'] for d in snap['documents']],mode=mode,**extra))
 
     def pending(self):
@@ -40,6 +45,33 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(len(p['documents']),4)
         self.assertEqual(p['errors'],[])
         self.assertEqual(store.state()['tasks'],[])
+
+    def test_new_preview_replaces_the_previous_snapshot_for_a_course(self):
+        first=self.scan('course-pack/01-lab-brief.txt')
+        self.scan('course-pack/02-project-brief.pdf')
+        with store.connection() as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM scans WHERE course_id=?',(self.cid,)).fetchone()[0],1)
+        with self.assertRaisesRegex(ValueError,'Preview these files first'):
+            engine.process(dict(scan_id=first['scan_id'],hashes=[first['documents'][0]['sha256']],mode='replay'))
+
+    def test_initialize_prunes_legacy_scans_and_enforces_one_per_course(self):
+        with store.connection() as c:
+            c.execute('DROP INDEX IF EXISTS scans_one_per_course')
+            c.execute('INSERT INTO scans(id,course_id,snapshot) VALUES(?,?,?)',('legacy-old',self.cid,'old'))
+            c.execute('INSERT INTO scans(id,course_id,snapshot) VALUES(?,?,?)',('legacy-new',self.cid,'new'))
+        store.initialize()
+        with store.connection() as c:
+            rows=c.execute('SELECT id,snapshot FROM scans WHERE course_id=?',(self.cid,)).fetchall()
+            self.assertEqual([(r['id'],r['snapshot']) for r in rows],[('legacy-new','new')])
+            with self.assertRaises(sqlite3.IntegrityError):
+                c.execute('INSERT INTO scans(id,course_id,snapshot) VALUES(?,?,?)',('extra',self.cid,'extra'))
+
+    def test_course_with_only_a_preview_snapshot_can_be_deleted(self):
+        self.scan('course-pack/01-lab-brief.txt')
+        result=store.mutate('courses',self.cid,'DELETE',{})
+        self.assertEqual(result,{'deleted':self.cid})
+        with store.connection() as c:
+            self.assertEqual(c.execute('SELECT COUNT(*) FROM scans WHERE course_id=?',(self.cid,)).fetchone()[0],0)
 
     def test_success_requires_confirmation_and_is_recoverable(self):
         self.process('course-pack/01-lab-brief.txt')
@@ -127,10 +159,77 @@ class WorkflowTests(unittest.TestCase):
             with self.assertRaises(ValueError):self.process('course-pack/01-lab-brief.txt',mode='live')
             call.assert_not_called()
 
+    def test_live_accepts_consent_bound_to_the_current_scan_hashes_and_provider(self):
+        with patch.object(model,'complete',return_value={'tasks':[]}) as call:
+            result=self.process('course-pack/01-lab-brief.txt',mode='live',consent='scope')
+        self.assertEqual(result['results'][0]['status'],'proposed')
+        call.assert_called_once()
+
+    def test_live_rejects_consent_from_another_scan(self):
+        first=self.scan('course-pack/01-lab-brief.txt')
+        second=self.scan('course-pack/02-project-brief.pdf')
+        provider={k:config.load()[k] for k in ('base_url','model')}
+        stale=dict(confirmed=True,scan_id=first['scan_id'],hashes=[first['documents'][0]['sha256']],provider=provider)
+        with patch.object(model,'complete') as call:
+            with self.assertRaisesRegex(ValueError,'current preview and provider'):
+                engine.process(dict(scan_id=second['scan_id'],hashes=[second['documents'][0]['sha256']],
+                                    mode='live',provider=provider,consent=stale))
+            call.assert_not_called()
+
+    def test_live_extraction_blocks_preview_and_settings_mutations(self):
+        files=[]
+        for name in ['01-lab-brief.txt','02-project-brief.pdf']:
+            path=config.ROOT/'examples/course-pack'/name
+            files.append(dict(name=name,content=base64.b64encode(path.read_bytes()).decode()))
+        snap=engine.preview(dict(course_id=self.cid,files=files))
+        hashes=[d['sha256'] for d in snap['documents']]
+        provider={k:config.load()[k] for k in ('base_url','model')}
+        consent=dict(confirmed=True,scan_id=snap['scan_id'],hashes=hashes,provider=provider)
+        started,release=threading.Event(),threading.Event()
+        result=[]
+
+        def complete(*args,**kwargs):
+            started.set()
+            if not release.wait(5):
+                raise AssertionError('Test did not release the model call.')
+            return {'tasks':[]}
+
+        def run():
+            result.append(engine.process(dict(scan_id=snap['scan_id'],hashes=hashes,mode='live',
+                                              provider=provider,consent=consent)))
+
+        with patch.object(model,'complete',side_effect=complete) as call:
+            worker=threading.Thread(target=run)
+            worker.start()
+            self.assertTrue(started.wait(5))
+            failures=[]
+            try:
+                for mutation in (
+                    lambda: engine.preview(dict(course_id=self.cid,files=files)),
+                    lambda: engine.save_settings(dict(model='changed-during-extraction')),
+                    lambda: engine.mutate('courses',self.cid,'DELETE',{}),
+                ):
+                    try:
+                        mutation()
+                    except store.Conflict:
+                        pass
+                    except Exception as exc:
+                        failures.append(type(exc).__name__)
+                    else:
+                        failures.append('allowed')
+            finally:
+                release.set()
+                worker.join(5)
+            self.assertEqual(failures,[])
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(call.call_count,2)
+        self.assertEqual(result[0]['results'][0]['status'],'proposed')
+        self.assertEqual(config.load()['model'],provider['model'])
+
     def test_api_failure_preserves_saved_records(self):
         before=self.accepted_lab()
         with patch.object(model,'complete',side_effect=ValueError('Provider unavailable')):
-            r=self.process('updates/lab-1-revised.txt',mode='live',consent=True)
+            r=self.process('updates/lab-1-revised.txt',mode='live',consent='scope')
         self.assertEqual(r['results'][0]['status'],'failed')
         self.assertEqual(store.state()['tasks'][0],before)
 
@@ -161,6 +260,58 @@ class WorkflowTests(unittest.TestCase):
         output=copy.deepcopy(engine.replay(d));output['tasks'][0]['evidence'][0]['quote']='This does not occur in the source.'
         tasks,errors=engine.validated_tasks(output,d['units'])
         self.assertEqual(tasks,[]);self.assertTrue(errors)
+
+    def test_hallucinated_title_and_task_key_are_rejected(self):
+        d=self.scan('course-pack/01-lab-brief.txt')['documents'][0]
+        for field,value in [('title','Buy groceries'),('task_key','shopping-list')]:
+            output=copy.deepcopy(engine.replay(d));output['tasks'][0][field]=value
+            tasks,errors=engine.validated_tasks(output,d['units'])
+            self.assertEqual(tasks,[]);self.assertTrue(errors)
+
+    def test_source_grounding_allows_case_only_differences(self):
+        d=self.scan('course-pack/01-lab-brief.txt')['documents'][0]
+        output=copy.deepcopy(engine.replay(d));task=output['tasks'][0]
+        task['task_key']='LAB-1';task['title']=task['title'].upper();task['requirements'][0]=task['requirements'][0].upper()
+        tasks,errors=engine.validated_tasks(output,d['units'])
+        self.assertFalse(errors);self.assertEqual(tasks[0]['task_key'],'lab-1');self.assertEqual(len(tasks[0]['requirements']),1)
+
+    def test_each_requirement_needs_its_own_supporting_quote(self):
+        d=self.scan('course-pack/01-lab-brief.txt')['documents'][0]
+        output=copy.deepcopy(engine.replay(d));output['tasks'][0]['requirements'].append('Pay a processing fee.')
+        tasks,errors=engine.validated_tasks(output,d['units'])
+        self.assertFalse(errors)
+        self.assertEqual(tasks[0]['requirements'],['Submission: Upload one PDF report (maximum 3 pages).'])
+        self.assertTrue(any('requirement' in warning.lower() for warning in tasks[0]['warnings']))
+
+    def test_grounding_does_not_join_separate_source_units(self):
+        units=[
+            {'locator':'line 1','text':'Alpha'},
+            {'locator':'line 2','text':'Beta'},
+            {'locator':'line 3','text':'Need red'},
+            {'locator':'line 4','text':'blue rule'},
+        ]
+        task=dict(title='Alpha',task_key='Alpha',date='',time='',tentative=False,
+                  requirements=['Need red'],evidence=[
+                      {'locator':'line 1','quote':'Alpha','field':'task'},
+                      {'locator':'line 2','quote':'Beta','field':'task'},
+                      {'locator':'line 3','quote':'Need red','field':'requirements'},
+                      {'locator':'line 4','quote':'blue rule','field':'requirements'},
+                  ])
+        for field,value in (
+            ('title','Alpha Beta'),
+            ('task_key','Alpha Beta'),
+            ('requirements',['Need red blue rule']),
+        ):
+            with self.subTest(field=field):
+                candidate=copy.deepcopy(task)
+                candidate[field]=value
+                tasks,errors=engine.validated_tasks({'tasks':[candidate]},units)
+                if field == 'requirements':
+                    self.assertEqual(tasks[0]['requirements'],[])
+                    self.assertTrue(tasks[0]['warnings'])
+                else:
+                    self.assertEqual(tasks,[])
+                    self.assertTrue(errors)
 
     def test_fake_locator_rejected(self):
         d=self.scan('course-pack/01-lab-brief.txt')['documents'][0]
@@ -212,7 +363,7 @@ class WorkflowTests(unittest.TestCase):
     def test_provider_destination_change_blocks_transmission(self):
         with patch.object(model,'complete') as call:
             with self.assertRaisesRegex(ValueError,'Provider settings changed'):
-                self.process('course-pack/01-lab-brief.txt',mode='live',consent=True,
+                self.process('course-pack/01-lab-brief.txt',mode='live',consent='scope',
                              provider={'base_url':'https://different.invalid/v1','model':'unknown'})
             call.assert_not_called()
 

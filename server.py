@@ -82,7 +82,7 @@ class Handler(SimpleHTTPRequestHandler):
             path = urlsplit(self.path).path
             if method == 'POST':
                 if path == '/api/settings':
-                    return self.send_json(config.save(data))
+                    return self.send_json(engine.save_settings(data))
                 if path == '/api/settings/test':
                     model.complete([{'locator':'connection-check','text':'This is a connection check. There are no academic tasks. Return {"tasks":[]}.'}])
                     return self.send_json({'ok':True,'notice':'Synthetic connection request succeeded.'})
@@ -121,7 +121,7 @@ class Handler(SimpleHTTPRequestHandler):
                 table, ident = match[1],int(match[2]) if match[2] else None
                 if (method=='POST') != (ident is None):
                     raise ValueError('Invalid record endpoint.')
-                result = store.mutate(table,ident,method,data)
+                result = engine.mutate(table,ident,method,data)
                 return self.send_json(result,201 if method=='POST' else 200)
             return self.send_json({'error':'Unknown endpoint.'},404)
         except store.Conflict as e:
