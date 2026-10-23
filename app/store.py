@@ -111,7 +111,7 @@ def mutate(table, ident, method, data):
                 c.execute('DELETE FROM scans WHERE course_id=?', (ident,))
             if table == 'courses' and any(c.execute(f'SELECT 1 FROM {t} WHERE course_id=? LIMIT 1', (ident,)).fetchone()
                                          for t in ('tasks', 'documents')):
-                raise ValueError('Course has tasks or source history; retain it or use a fresh demo database.')
+                raise ValueError('ERR_COURSE_HAS_TASKS')
             if table == 'tasks':
                 c.execute('INSERT INTO history(task_id,action,before_json) VALUES(?,?,?)',
                           (ident, 'manual-delete', json.dumps(dict(old))))
@@ -139,3 +139,4 @@ def demo():
         cid = c.execute('INSERT INTO courses(name,color,folder) VALUES(?,?,?)',
                         ('SYNTH101 — Fictional Computing', '#427864', str(ROOT / 'examples' / 'course-pack'))).lastrowid
         return dict(course_id=cid)
+ 

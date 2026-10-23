@@ -1,6 +1,10 @@
 'use strict';
 const I18N = (() => {
  const messages = {
+    "ERR_COURSE_HAS_TASKS": [
+    "此課程已有任務或來源歷史紀錄；請保留它，或使用全新的測試資料庫。",
+    "Course has tasks or source history; retain it or use a fresh demo database."
+  ],
   "学习日历": [
     "學習日曆",
     "Study Calendar"
