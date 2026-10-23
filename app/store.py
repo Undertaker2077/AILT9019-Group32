@@ -47,6 +47,8 @@ def initialize():
         CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY, task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
           proposal_id INTEGER REFERENCES proposals(id), action TEXT NOT NULL, before_json TEXT, after_json TEXT,
           created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+        DELETE FROM scans WHERE rowid NOT IN (SELECT MAX(rowid) FROM scans GROUP BY course_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS scans_one_per_course ON scans(course_id);
         ''')
 
 
@@ -105,8 +107,10 @@ def mutate(table, ident, method, data):
         if table == 'tasks' and method != 'POST' and data.get('expected_version') != old['version']:
             raise Conflict('This task changed. Close the editor, refresh, and review the latest version.')
         if method == 'DELETE':
+            if table == 'courses':
+                c.execute('DELETE FROM scans WHERE course_id=?', (ident,))
             if table == 'courses' and any(c.execute(f'SELECT 1 FROM {t} WHERE course_id=? LIMIT 1', (ident,)).fetchone()
-                                         for t in ('tasks', 'documents', 'scans')):
+                                         for t in ('tasks', 'documents')):
                 raise ValueError('Course has tasks or source history; retain it or use a fresh demo database.')
             if table == 'tasks':
                 c.execute('INSERT INTO history(task_id,action,before_json) VALUES(?,?,?)',
