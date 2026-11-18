@@ -26,12 +26,17 @@ const workflowHTML = `
 </form></dialog>`;
 document.body.insertAdjacentHTML('beforeend', workflowHTML);
 let importSnapshot=null, chosenFiles=[], proposalRows=[], providerSettings=null, liveConsent=null;
+let browserSelectionMade = false;
 const message=(id,text)=>{$(id).textContent=text;};
 const selectedDocumentHashes=()=>Array.from(document.querySelectorAll('[data-document-hash]:checked')).map(x=>x.dataset.documentHash);
 function clearTransmissionConsent(){
  liveConsent=null;$('#transmission-consent').checked=false;
 }
 const busy=async(button,action,status='#workflow-status')=>{
+ if(button.id==='preview-files'){
+  status='#preview-result';
+  message('#workflow-status','');
+ }
  button.disabled=true;message(status,tr('处理中…'));
  try{await action();}catch(e){message(status,e.message);}finally{button.disabled=false;}
 };
@@ -42,6 +47,11 @@ async function fillImportCourses(selected){
  syncFolderField();
 }
 function syncFolderField(){
+  chosenFiles = [];
+  browserSelectionMade = false;
+  $('#folder-files').value = '';
+  $('#document-files').value = '';
+  message('#selected-files', '');
  const c=state.courses.find(c=>c.id===Number($('#import-course').value));$('#local-folder').value=c?.folder||'';
  importSnapshot=null;clearTransmissionConsent();$('#preview-result').replaceChildren();
 }
@@ -59,7 +69,8 @@ $('#load-demo').onclick=()=>busy($('#load-demo'),async()=>{
  const demo=await api('/api/demo','POST',{});await fillImportCourses(demo.course_id);chosenFiles=[];message('#selected-files',tr('将读取仓库自带的虚构文件夹'));message('#workflow-status',tr('示例课程已就绪，点击预览。'));
 });
 for(const id of ['#folder-files','#document-files'])$(id).onchange=e=>{
- chosenFiles=Array.from(e.target.files).filter(f=>/\.(pdf|docx|txt|md)$/i.test(f.name)&&!(f.webkitRelativePath||f.name).split('/').some(p=>p.startsWith('.')));
+  browserSelectionMade = true;
+  chosenFiles=Array.from(e.target.files).filter(f=>/\.(pdf|docx|txt|md)$/i.test(f.name)&&!(f.webkitRelativePath||f.name).split('/').some(p=>p.startsWith('.')));
  importSnapshot=null;clearTransmissionConsent();$('#preview-result').replaceChildren();message('#selected-files',`${chosenFiles.length} ${tr('个文件已选择')}`);
 };
 $('#save-folder').onclick=()=>busy($('#save-folder'),async()=>{
@@ -72,7 +83,11 @@ async function encodedFile(f){
 }
 $('#preview-files').onclick=()=>busy($('#preview-files'),async()=>{
  if(!$('#import-course').value)throw new Error(tr('先创建或选择一门课程。'));
-   
+ if (browserSelectionMade && chosenFiles.length === 0) {
+  throw new Error(
+    tr('没有选择受支持的文件。请选择 PDF、DOCX、TXT 或 MD 文件。')
+  );
+}  
  // 1. 檢查是不是有單一檔案超過 2MB
   const tooBigFile = chosenFiles.find(f => f.size > 2 * 1024 * 1024);
   if (tooBigFile) {

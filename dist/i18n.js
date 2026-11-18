@@ -21,9 +21,13 @@ const I18N = (() => {
     "最多只能選擇 20 份檔案！",
     "Maximum 20 files allowed."
   ],
-  "所有文件总大小超过 10MB 限制！": [
+    "所有文件总大小超过 10MB 限制！": [
     "所有檔案總大小超過 10MB 限制！",
     "Total file size exceeds the 10MB limit."
+  ],
+  "没有选择受支持的文件。请选择 PDF、DOCX、TXT 或 MD 文件。": [
+    "沒有選取支援的檔案。請選擇 PDF、DOCX、TXT 或 MD 檔案。",
+    "No supported files selected. Please choose PDF, DOCX, TXT or MD files."
   ],
   "学习日历": [
     "學習日曆",
