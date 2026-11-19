@@ -2,7 +2,7 @@
 
 ## AI Study Calendar
 
-**在线课程演示 / Live demo** · [打开学习日历 / Open Study Calendar](https://ailt-9019-group32.vercel.app)
+**Live demo** · [Open Study Calendar](https://ailt-9019-group32.vercel.app)
 
 A local, review-first study planner for fictional/public course documents. Python + SQLite backend, browser interface, Windows and macOS launchers. No Node build step or account login is required.
 
