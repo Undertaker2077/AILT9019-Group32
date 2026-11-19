@@ -1,0 +1,181 @@
+{
+  "documents": [
+    {
+      "filename": "01-lab-brief.txt",
+      "sha256": "e9a5afeb387b8c59c768d10e20191e923be807b4d3b26853afa268f1d9a4ae97",
+      "units": [
+        {
+          "locator": "line 1",
+          "text": "SYNTH101 - Fictional course; self-authored synthetic material."
+        },
+        {
+          "locator": "line 2",
+          "text": "Assignment ID: lab-1"
+        },
+        {
+          "locator": "line 3",
+          "text": "Task: Submit Lab 1 report."
+        },
+        {
+          "locator": "line 4",
+          "text": "Deadline: 2026-10-26 17:00 (Asia/Hong_Kong)."
+        },
+        {
+          "locator": "line 5",
+          "text": "Submission: Upload one PDF report (maximum 3 pages)."
+        }
+      ],
+      "size": 209
+    },
+    {
+      "filename": "02-project-brief.pdf",
+      "sha256": "6c68dbb5ee28b4e0621a302f4da9eedfb621eacfca407f61c44cd9a61e849c76",
+      "units": [
+        {
+          "locator": "page 1",
+          "text": "SYNTH101 - Fictional course; self-authored synthetic material.\nAssignment ID: project-1\nTask: Submit Project 1 prototype.\nDeadline: 2026-11-03 12:00 (Asia/Hong_Kong).\nSubmission: Upload a ZIP with code, README and a test log.\n"
+        }
+      ],
+      "size": 1607
+    },
+    {
+      "filename": "03-reflection.docx",
+      "sha256": "0b939921fd2885ab74f8de8ffc8269f6966bbc229256843a4e05fa2898e0d6bd",
+      "units": [
+        {
+          "locator": "paragraph 1",
+          "text": "SYNTH101 - Fictional course; self-authored synthetic material."
+        },
+        {
+          "locator": "paragraph 2",
+          "text": "Assignment ID: reflection-1"
+        },
+        {
+          "locator": "paragraph 3",
+          "text": "Task: Submit a reflection note."
+        },
+        {
+          "locator": "paragraph 4",
+          "text": "The deadline has not been announced."
+        },
+        {
+          "locator": "paragraph 5",
+          "text": "Submission: Upload one Markdown file."
+        }
+      ],
+      "size": 36724
+    },
+    {
+      "filename": "04-reading.md",
+      "sha256": "188b8b7065be6b6ebba975fc383069ca054ae39882892ae3937b67b3d43a0e32",
+      "units": [
+        {
+          "locator": "line 1",
+          "text": "# Reading notes"
+        },
+        {
+          "locator": "line 2",
+          "text": "Fictional background material only."
+        },
+        {
+          "locator": "line 3",
+          "text": "The lecture occurred on 2026-10-01. There is no submission task in this document."
+        }
+      ],
+      "size": 134
+    }
+  ],
+  "replay": {
+    "e9a5afeb387b8c59c768d10e20191e923be807b4d3b26853afa268f1d9a4ae97": {
+      "tasks": [
+        {
+          "task_key": "lab-1",
+          "title": "Submit Lab 1 report.",
+          "date": "2026-10-26",
+          "time": "17:00",
+          "tentative": false,
+          "requirements": [
+            "Submission: Upload one PDF report (maximum 3 pages)."
+          ],
+          "evidence": [
+            {
+              "locator": "line 3",
+              "quote": "Task: Submit Lab 1 report.",
+              "field": "task"
+            },
+            {
+              "locator": "line 4",
+              "quote": "2026-10-26 17:00",
+              "field": "deadline"
+            },
+            {
+              "locator": "line 5",
+              "quote": "Submission: Upload one PDF report (maximum 3 pages).",
+              "field": "requirements"
+            }
+          ]
+        }
+      ]
+    },
+    "6c68dbb5ee28b4e0621a302f4da9eedfb621eacfca407f61c44cd9a61e849c76": {
+      "tasks": [
+        {
+          "task_key": "project-1",
+          "title": "Submit Project 1 prototype.",
+          "date": "2026-11-03",
+          "time": "12:00",
+          "tentative": false,
+          "requirements": [
+            "Submission: Upload a ZIP with code, README and a test log."
+          ],
+          "evidence": [
+            {
+              "locator": "page 1",
+              "quote": "Task: Submit Project 1 prototype.",
+              "field": "task"
+            },
+            {
+              "locator": "page 1",
+              "quote": "2026-11-03 12:00",
+              "field": "deadline"
+            },
+            {
+              "locator": "page 1",
+              "quote": "Submission: Upload a ZIP with code, README and a test log.",
+              "field": "requirements"
+            }
+          ]
+        }
+      ]
+    },
+    "0b939921fd2885ab74f8de8ffc8269f6966bbc229256843a4e05fa2898e0d6bd": {
+      "tasks": [
+        {
+          "task_key": "reflection-1",
+          "title": "Submit a reflection note.",
+          "date": "",
+          "time": "",
+          "tentative": false,
+          "requirements": [
+            "Submission: Upload one Markdown file."
+          ],
+          "evidence": [
+            {
+              "locator": "paragraph 3",
+              "quote": "Task: Submit a reflection note.",
+              "field": "task"
+            },
+            {
+              "locator": "paragraph 5",
+              "quote": "Submission: Upload one Markdown file.",
+              "field": "requirements"
+            }
+          ]
+        }
+      ]
+    },
+    "188b8b7065be6b6ebba975fc383069ca054ae39882892ae3937b67b3d43a0e32": {
+      "tasks": []
+    }
+  }
+}

@@ -35,12 +35,13 @@ const formatDate = date => new Intl.DateTimeFormat(I18N.locale,{timeZone:'UTC',m
 const displayDate = task => task.date ? `${formatDate(task.date)}${task.time?' '+task.time:' · '+tr('时间待定')}${task.tentative?' · '+tr('暂定'):''}` : tr('日期待定');
 function toast(message){$('#toast').textContent=message;$('#toast').style.display='block';clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').style.display='none',3000);}
 async function api(path,method='GET',data){
+ if(window.courseDemoApi && path.startsWith('/api/')) return window.courseDemoApi(path,method,data);
  const response=await fetch(path,{method,headers:method==='GET'?{}:{'Content-Type':'application/json'},...(data===undefined?{}:{body:JSON.stringify(data)})});
  const result=await response.json();if(!response.ok) throw new Error(tr(result.error)||tr('保存失败，请重试'));return result;
 }
 async function refresh(){
  try{[state,timetable,assessments,academicCalendar]=await Promise.all([api('/api/state'),api('/timetable.json'),api('/assessments.json'),api('/academic-calendar.json')]);$('#load-error').hidden=true;render();}
- catch(e){$('#load-error').hidden=false;$('#load-error').textContent=tr('暂时无法连接本机服务，请重新打开启动文件，再刷新网页。')+e.message;throw e;}
+ catch(e){$('#load-error').hidden=false;$('#load-error').textContent=(window.courseDemoApi?'':tr('暂时无法连接本机服务，请重新打开启动文件，再刷新网页。'))+e.message;throw e;}
 }
 function setView(nextView){view=nextView;render();}
 function render(){

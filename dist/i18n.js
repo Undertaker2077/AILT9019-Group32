@@ -1,6 +1,10 @@
 'use strict';
 const I18N = (() => {
  const messages = {
+  "课程演示版 · 使用虚构文档，日历任务保存在此浏览器。": [
+    "課程演示版 · 使用虛構文件，日曆任務保存在此瀏覽器。",
+    "Course demo · Uses fictional documents. Calendar tasks stay in this browser."
+  ],
   "请填写任务名称（不超过300字）。": [
     "請填寫任務名稱（不超過300字）。",
     "Task title is required (maximum 300 characters)."

@@ -1,0 +1,15 @@
+#ai-settings,
+#settings-dialog,
+.course-folder-action,
+#folder-files,
+#document-files {
+  display: none;
+}
+
+.demo-notice {
+  margin-block: 0 1rem;
+}
+
+#import-dialog [hidden] {
+  display: none !important;
+}

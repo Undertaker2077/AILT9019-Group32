@@ -112,3 +112,13 @@ Use `python scripts/package_submission.py` to create an allowlisted source ZIP u
 ## 中文操作提示
 
 先运行对应系统的Setup脚本，再运行Start脚本。进入“AI导入”→“载入虚构示例课程”→“预览文本与变化”。无key可选明确标记的“示例回放”；真实AI须在“API设置”填写自己的配置，并确认文本发送范围。核对来源、日期和冲突后，再点击“确认写入日历”。所有时间按香港时区解释。请勿把真实个人资料、实际API key或数据库提交到仓库。
+
+## Vercel 课程演示版 / Hosted course demo
+
+此版本使用随仓库附带的虚构课程文档与固定回放结果。访问者可以浏览证据、确认候选、编辑日历任务并导出备份。课程和任务保存在当前浏览器中。云端演示没有账户、文件上传或真实模型连接。
+
+Run `node demo/build.cjs` (Node.js 20+) to generate the static site at `output/course-demo`. For a local check, run `python3 -m http.server 3458 --bind 127.0.0.1 --directory output/course-demo`. Open AI 导入 → 载入虚构示例课程 → 预览文本与变化. Select the Lab 1 sample and replay it, review the evidence, and confirm the calendar entry.
+
+For Git deployment, import the repository into a Vercel account with access to the chosen branch. Keep its root directory at the repository root. The checked-in `vercel.json` defines the build and output directory. For a direct deployment, build locally, change into `output/course-demo`, and run `npx vercel --prod` while signed into Vercel. The static folder contains only the site assets and fictional previews.
+
+Run `node --test demo/calendar.test.cjs` to test review and browser-storage behavior. If the bundled course pack or replay outputs change, refresh the static fixture file with `.venv/bin/python demo/generate-fixtures.py`.
