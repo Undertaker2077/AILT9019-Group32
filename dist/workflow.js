@@ -25,6 +25,12 @@ const workflowHTML = `
  <div class="workflow-controls"><button class="primary" type="submit">${tr('保存设置')}</button><button class="small-btn" type="button" id="test-api">${tr('连接测试（会发送一条虚构请求）')}</button></div><p id="settings-status" role="status"></p>
 </form></dialog>`;
 document.body.insertAdjacentHTML('beforeend', workflowHTML);
+if(window.courseDemoApi){
+ for(const id of ['#folder-files','#document-files','#transmission-consent'])$(id).closest('label').hidden=true;
+ $('#local-folder').closest('details').hidden=true;
+ $('#import-dialog .workflow-step .workflow-note').hidden=true;
+ $('#extract-mode').querySelector('[value="live"]').remove();
+}
 let importSnapshot=null, chosenFiles=[], proposalRows=[], providerSettings=null, liveConsent=null;
 let browserSelectionMade = false;
 const message=(id,text)=>{$(id).textContent=text;};
@@ -60,6 +66,7 @@ async function settingsPublic(){
  const next=await api('/api/settings');
  if(providerSettings&&(providerSettings.base_url!==next.base_url||providerSettings.model!==next.model))clearTransmissionConsent();
  providerSettings=next;
+ if(window.courseDemoApi){message('#provider-notice',tr('回放模式不发送网络请求。'));return;}
  message('#provider-notice',`${tr('实时模式目标')}: ${providerSettings.base_url} · ${providerSettings.model}. ${tr('回放模式不发送网络请求。')}`);
 }
 $('#ai-import').onclick=()=>busy($('#ai-import'),async()=>{
@@ -151,7 +158,12 @@ async function loadProposals(){
  $('#proposal-list').querySelectorAll('form').forEach(form=>{
   form.elements.date.oninput=()=>{if(!form.elements.date.value)form.elements.time.value='';};
   form.onsubmit=async e=>{e.preventDefault();const f=form.elements,b=form.querySelector('[type=submit]');b.disabled=true;
-   try{const opt=f.target.selectedOptions[0];await api(`/api/proposals/${form.dataset.proposal}/decision`,'POST',{decision:'accept',target_id:f.target.value?Number(f.target.value):null,expected_version:opt.dataset.version?Number(opt.dataset.version):null,conflict_ack:f.ack.checked,match_ack:f.ack.checked,patch:{title:f.title.value,date:f.date.value,time:f.time.value,tentative:f.tentative.checked}});await loadProposals();message('#workflow-status',tr('已确认并保存到日历。'));}catch(err){form.querySelector('.decision-status').textContent=err.message;b.disabled=false;}
+   try{const opt=f.target.selectedOptions[0];const {task}=await api(`/api/proposals/${form.dataset.proposal}/decision`,'POST',{decision:'accept',target_id:f.target.value?Number(f.target.value):null,expected_version:opt.dataset.version?Number(opt.dataset.version):null,conflict_ack:f.ack.checked,match_ack:f.ack.checked,patch:{title:f.title.value,date:f.date.value,time:f.time.value,tentative:f.tentative.checked}});await loadProposals();
+    if(window.courseDemoApi && task.date){
+     const [taskYear,taskMonth]=task.date.split('-').map(Number);
+     year=taskYear;month=taskMonth-1;filter=null;setView('calendar');
+    }
+    message('#workflow-status',tr('已确认并保存到日历。'));}catch(err){form.querySelector('.decision-status').textContent=err.message;b.disabled=false;}
   };
  });
  $('#proposal-list').querySelectorAll('[data-reject]').forEach(b=>b.onclick=()=>busy(b,async()=>{await api(`/api/proposals/${b.dataset.reject}/decision`,'POST',{decision:'reject'});await loadProposals();message('#workflow-status',tr('候选已拒绝，日历未修改。'));}));

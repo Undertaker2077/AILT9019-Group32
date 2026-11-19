@@ -1,0 +1,11 @@
+.venv
+venv
+data
+local
+.env
+.env.*
+*.sqlite3*
+*.log
+__pycache__
+output
+更新核验
