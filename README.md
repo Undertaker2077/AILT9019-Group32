@@ -2,7 +2,7 @@
 
 ## AI Study Calendar
 
-**Live demo** · [Open Study Calendar](https://ailt-9019-group32-6ntcga0uk-undertaker2077.vercel.app/)
+**Live demo** · [Open Study Calendar](https://ailt-9019-group32-git-course-demo-undertaker2077.vercel.app?_vercel_share=FAuuMZGWX2Zm2bxPuOG8SfrBcOzEipSP)
 
 A local, review-first study planner for fictional/public course documents. Python + SQLite backend, browser interface, Windows and macOS launchers. No Node build step or account login is required.
 
